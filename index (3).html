@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiosco De Mati</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --cherry:#E63946;
+    --cherry-dark:#C22735;
+    --cream:#FFF8EC;
+    --bg:#FFF1DC;
+    --mustard:#F4A93B;
+    --mint:#2EC4B6;
+    --ink:#2B2118;
+    --muted:#8A7A6B;
+    --card:#FFFFFF;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    font-family:'Nunito',sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    padding-bottom:100px;
+  }
+
+  h1,h2,h3{ font-family:'Fredoka',sans-serif; margin:0; }
+
+  /* ===== AWNING / CANOPY (signature element) ===== */
+  .canopy{
+    height:34px;
+    background: repeating-linear-gradient(90deg, var(--cherry) 0 34px, var(--cream) 34px 68px);
+    position:relative;
+  }
+  .canopy::after{
+    content:"";
+    position:absolute;
+    left:0;right:0;bottom:-17px;
+    height:17px;
+    background-image: radial-gradient(circle at 17px 0, transparent 17px, var(--bg) 18px);
+    background-size:34px 17px;
+    background-repeat:repeat-x;
+  }
+
+  .signage{
+    text-align:center;
+    padding:34px 20px 22px;
+  }
+  .signage h1{
+    font-size:clamp(28px,7vw,42px);
+    color:var(--cherry-dark);
+    letter-spacing:0.01em;
+    text-shadow: 2px 2px 0 rgba(244,169,59,0.35);
+  }
+  .signage p{
+    margin-top:8px;
+    color:var(--muted);
+    font-weight:600;
+    font-size:14px;
+  }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-state{
+    text-align:center;
+    padding:60px 24px;
+    color:var(--muted);
+  }
+  .empty-state .emoji{ font-size:48px; display:block; margin-bottom:12px; }
+  .empty-state h3{ color:var(--ink); font-size:20px; margin-bottom:6px; }
+
+  /* ===== GRID ===== */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+    gap:16px;
+    padding:8px 20px 20px;
+    max-width:900px;
+    margin:0 auto;
+  }
+
+  .product{
+    background:var(--card);
+    border-radius:16px;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 8px 20px -10px rgba(43,33,24,0.25);
+    display:flex;
+    flex-direction:column;
+  }
+
+  .product .photo{
+    width:100%;
+    aspect-ratio:1/1;
+    background:linear-gradient(135deg, var(--mustard), var(--mint));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:38px;
+    object-fit:cover;
+  }
+  .product .info{
+    padding:10px 12px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    flex:1;
+  }
+  .product .name{
+    font-weight:800;
+    font-size:14px;
+    line-height:1.25;
+    min-height:34px;
+  }
+  .product .row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .price-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:13px;
+    background:var(--mustard);
+    color:var(--ink);
+    padding:4px 9px;
+    border-radius:20px;
+    border:1.5px dashed rgba(43,33,24,0.35);
+  }
+  .add-btn{
+    width:32px;height:32px;
+    border-radius:50%;
+    background:var(--cherry);
+    color:#fff;
+    border:none;
+    font-size:18px;
+    font-weight:800;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:transform .12s ease;
+  }
+  .add-btn:active{ transform:scale(0.88); }
+
+  /* editor overlay icons on product card */
+  .editor-icons{
+    position:absolute;
+    top:8px;right:8px;
+    display:flex;
+    gap:6px;
+  }
+  .editor-icons button{
+    width:26px;height:26px;
+    border-radius:50%;
+    border:none;
+    background:rgba(43,33,24,0.55);
+    color:#fff;
+    font-size:12px;
+    cursor:pointer;
+  }
+
+  /* ===== FLOATING CART BUTTON ===== */
+  #cartFab{
+    position:fixed;
+    bottom:22px; right:22px;
+    background:var(--cherry);
+    color:#fff;
+    border:none;
+    border-radius:30px;
+    padding:14px 20px;
+    font-family:'Fredoka',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    box-shadow:0 10px 24px -8px rgba(230,57,70,0.55);
+    cursor:pointer;
+    z-index:40;
+  }
+  #cartCount{
+    background:#fff;
+    color:var(--cherry-dark);
+    border-radius:50%;
+    min-width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;
+    font-weight:800;
+  }
+
+  /* ===== OVERLAYS / MODALS ===== */
+  .overlay{
+    position:fixed; inset:0;
+    background:rgba(43,33,24,0.45);
+    display:flex; align-items:flex-end;
+    justify-content:center;
+    z-index:100;
+  }
+  .overlay.center{ align-items:center; }
+  .overlay.hidden{ display:none; }
+
+  .drawer, .modal{
+    background:var(--cream);
+    width:100%;
+    max-width:420px;
+    border-radius:22px 22px 0 0;
+    padding:22px 22px 26px;
+    max-height:82vh;
+    overflow-y:auto;
+  }
+  .overlay.center .modal{ border-radius:20px; }
+
+  .drawer h2, .modal h3{ color:var(--cherry-dark); margin-bottom:14px; }
+
+  .cart-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid rgba(43,33,24,0.08);
+  }
+  .cart-item .thumb{
+    width:44px;height:44px;border-radius:10px;
+    background:linear-gradient(135deg, var(--mustard), var(--mint));
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px;
+    object-fit:cover;
+    flex-shrink:0;
+  }
+  .cart-item .meta{ flex:1; }
+  .cart-item .meta .n{ font-weight:800; font-size:13px; }
+  .cart-item .meta .p{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); }
+  .qty-ctrl{
+    display:flex; align-items:center; gap:6px;
+  }
+  .qty-ctrl button{
+    width:24px;height:24px;border-radius:50%;
+    border:1.5px solid var(--cherry);
+    background:#fff; color:var(--cherry);
+    font-weight:800; cursor:pointer;
+  }
+  .qty-ctrl span{ font-weight:800; min-width:16px; text-align:center; }
+
+  .cart-total{
+    display:flex; justify-content:space-between;
+    font-family:'Fredoka',sans-serif;
+    font-size:18px; font-weight:600;
+    margin:16px 0;
+    color:var(--ink);
+  }
+
+  .btn{
+    width:100%;
+    padding:13px;
+    border-radius:14px;
+    border:none;
+    font-family:'Fredoka',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    cursor:pointer;
+    margin-top:8px;
+  }
+  .btn-primary{ background:var(--mint); color:#fff; }
+  .btn-secondary{ background:transparent; color:var(--muted); }
+  .btn-cherry{ background:var(--cherry); color:#fff; }
+
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; font-weight:800; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
+  .field input[type=text], .field input[type=number], .field input[type=password]{
+    width:100%; padding:11px 12px; border-radius:10px;
+    border:1.5px solid rgba(43,33,24,0.15);
+    font-family:'Nunito',sans-serif; font-size:14px; background:#fff;
+  }
+  .field input[type=file]{ font-size:13px; }
+  #photoPreview{
+    width:90px;height:90px;object-fit:cover;border-radius:12px;margin-top:8px;
+  }
+  .error-text{ color:var(--cherry-dark); font-size:12px; font-weight:700; min-height:16px; margin-top:2px; }
+
+  /* ===== EDITOR DISCREET DOT ===== */
+  #editorDot{
+    position:fixed;
+    bottom:10px; left:10px;
+    width:14px;height:14px;
+    border-radius:50%;
+    background:var(--ink);
+    opacity:0.08;
+    z-index:50;
+    cursor:pointer;
+  }
+  #editorDot:hover{ opacity:0.25; }
+
+  /* ===== EDITOR BAR ===== */
+  #editorBar{
+    position:sticky; top:0; z-index:60;
+    background:var(--ink);
+    color:#fff;
+    padding:10px 16px;
+    display:flex; align-items:center; gap:10px;
+    flex-wrap:wrap;
+    font-size:13px;
+    font-weight:700;
+  }
+  #editorBar button{
+    background:rgba(255,255,255,0.15);
+    color:#fff; border:none; border-radius:20px;
+    padding:7px 13px; font-size:12px; font-weight:700; cursor:pointer;
+    font-family:'Nunito',sans-serif;
+  }
+  #editorBar button.exit{ margin-left:auto; background:var(--cherry); }
+
+  .add-product-card{
+    border:2px dashed rgba(43,33,24,0.25);
+    border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    gap:6px;
+    color:var(--muted);
+    font-weight:800;
+    font-size:13px;
+    cursor:pointer;
+    min-height:180px;
+    background:transparent;
+  }
+</style>
+</head>
+<body>
+
+  <div id="editorBar" style="display:none;">
+    <span>✏️ Modo editor activo</span>
+    <button id="editStoreInfoBtn">Editar nombre / frase</button>
+    <button class="exit" id="exitEditorBtn">Salir</button>
+  </div>
+
+  <div class="canopy"></div>
+  <div class="signage">
+    <h1 id="storeNameDisplay">Kiosco De Mati</h1>
+    <p id="storeTaglineDisplay">Lo que necesitás, a la vuelta de tu casa</p>
+  </div>
+
+  <div id="emptyState" class="empty-state" hidden>
+    <span class="emoji">🧃</span>
+    <h3>Todavía no hay productos</h3>
+    <p>Entrá al modo editor (el puntito de abajo a la izquierda) para cargar el primero.</p>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <button id="cartFab">🛒 <span id="cartCount">0</span></button>
+
+  <!-- Carrito -->
+  <div id="cartOverlay" class="overlay hidden">
+    <div class="drawer">
+      <h2>Tu pedido</h2>
+      <div id="cartItems"></div>
+      <div id="cartEmptyMsg" style="display:none; color:var(--muted); padding:20px 0; text-align:center;">Todavía no agregaste nada 🛍️</div>
+      <div class="cart-total"><span>Total</span><span id="cartTotal">$0</span></div>
+      <button class="btn btn-primary" id="sendOrderBtn">Enviar pedido por WhatsApp</button>
+      <button class="btn btn-secondary" id="closeCartBtn">Seguir mirando</button>
+    </div>
+  </div>
+
+  <!-- Punto discreto modo editor -->
+  <div id="editorDot"></div>
+
+  <!-- Modal contraseña -->
+  <div id="passModal" class="overlay center hidden">
+    <div class="modal">
+      <h3>Modo editor</h3>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="passInput" placeholder="••••••••">
+      </div>
+      <div class="error-text" id="passError"></div>
+      <button class="btn btn-cherry" id="passSubmitBtn">Entrar</button>
+      <button class="btn btn-secondary" id="passCancelBtn">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Modal producto -->
+  <div id="productModal" class="overlay center hidden">
+    <div class="modal">
+      <h3 id="productModalTitle">Nuevo producto</h3>
+      <div class="field">
+        <label>Foto</label>
+        <input type="file" id="photoInput" accept="image/*">
+        <img id="photoPreview" hidden>
+      </div>
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="nameInput" placeholder="Ej: Alfajor Jorgito">
+      </div>
+      <div class="field">
+        <label>Precio</label>
+        <input type="number" id="priceInput" placeholder="Ej: 900">
+      </div>
+      <div class="error-text" id="productError"></div>
+      <button class="btn btn-primary" id="saveProductBtn">Guardar producto</button>
+      <button class="btn btn-secondary" id="cancelProductBtn">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Modal info del local -->
+  <div id="storeInfoModal" class="overlay center hidden">
+    <div class="modal">
+      <h3>Datos del kiosco</h3>
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="storeNameInput">
+      </div>
+      <div class="field">
+        <label>Frase</label>
+        <input type="text" id="storeTaglineInput">
+      </div>
+      <button class="btn btn-primary" id="saveStoreInfoBtn">Guardar</button>
+      <button class="btn btn-secondary" id="cancelStoreInfoBtn">Cancelar</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var EDITOR_PASSWORD = "Yourname123!Kiosco";
+  var WHATSAPP_NUMBER = "5491133138879";
+
+  // ===== FIREBASE (catálogo compartido en la nube) =====
+  var firebaseConfig = {
+    apiKey: "AIzaSyAvp6ToW1P7LTVbckjHubeGndI7ixhCwRQ",
+    authDomain: "kiosco-de-mati.firebaseapp.com",
+    projectId: "kiosco-de-mati",
+    storageBucket: "kiosco-de-mati.firebasestorage.app",
+    messagingSenderId: "727195689178",
+    appId: "1:727195689178:web:a670b7e93a98d7716985e3"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.firestore();
+  var catalogRef = db.collection("kiosco").doc("catalog");
+
+  var products = [];
+  var storeInfo = {
+    name: "Kiosco De Mati",
+    tagline: "Lo que necesitás, a la vuelta de tu casa"
+  };
+  var cart = {}; // id -> qty
+  var editorMode = false;
+  var editingProductId = null;
+  var pendingPhotoData = null;
+  var firestoreReady = false;
+
+  var placeholderEmojis = ["🍫","🥤","🍬","🍟","🧃","🍪","🥨","🍭","🧊","🥫"];
+
+  function saveProducts(){
+    catalogRef.set({ products: products }, { merge: true });
+  }
+  function saveInfo(){
+    catalogRef.set({ storeInfo: storeInfo }, { merge: true });
+  }
+
+  // Escucha en tiempo real: si vos editás desde tu celu, cualquiera que
+  // tenga la página abierta ve los cambios solo, sin recargar.
+  catalogRef.onSnapshot(function(doc){
+    var data = doc.data();
+    if(data){
+      if(data.products) products = data.products;
+      if(data.storeInfo) storeInfo = data.storeInfo;
+    } else {
+      // Primera vez: no existe el documento todavía, lo creamos vacío.
+      catalogRef.set({ products: [], storeInfo: storeInfo });
+    }
+    firestoreReady = true;
+    renderStoreInfo();
+    renderGrid();
+    renderCart();
+    updateCartFab();
+  }, function(err){
+    console.error("Firestore error:", err);
+    document.getElementById("emptyState").hidden = false;
+    document.getElementById("emptyState").innerHTML =
+      "<span class='emoji'>⚠️</span><h3>No se pudo conectar</h3><p>Revisá tu conexión a internet y recargá la página.</p>";
+  });
+
+  function fmtPrice(n){
+    return "$" + Number(n).toLocaleString("es-AR");
+  }
+
+  function renderStoreInfo(){
+    document.getElementById("storeNameDisplay").textContent = storeInfo.name;
+    document.getElementById("storeTaglineDisplay").textContent = storeInfo.tagline;
+  }
+
+  function renderGrid(){
+    var grid = document.getElementById("grid");
+    var empty = document.getElementById("emptyState");
+    grid.innerHTML = "";
+
+    empty.innerHTML = "<span class='emoji'>🧃</span><h3>Todavía no hay productos</h3><p>Entrá al modo editor (el puntito de abajo a la izquierda) para cargar el primero.</p>";
+    if(products.length === 0 && !editorMode){
+      empty.hidden = false;
+    } else {
+      empty.hidden = true;
+    }
+
+    products.forEach(function(p, idx){
+      var card = document.createElement("div");
+      card.className = "product";
+
+      var photoHtml;
+      if(p.photo){
+        photoHtml = '<img class="photo" src="'+p.photo+'" alt="'+p.name+'">';
+      } else {
+        var emoji = placeholderEmojis[idx % placeholderEmojis.length];
+        photoHtml = '<div class="photo">'+emoji+'</div>';
+      }
+
+      var editorIcons = editorMode
+        ? '<div class="editor-icons">'
+          + '<button data-edit="'+p.id+'" title="Editar">✎</button>'
+          + '<button data-del="'+p.id+'" title="Borrar">✕</button>'
+          + '</div>'
+        : '';
+
+      card.innerHTML =
+        editorIcons +
+        photoHtml +
+        '<div class="info">' +
+          '<div class="name">'+p.name+'</div>' +
+          '<div class="row">' +
+            '<span class="price-tag">'+fmtPrice(p.price)+'</span>' +
+            '<button class="add-btn" data-add="'+p.id+'">+</button>' +
+          '</div>' +
+        '</div>';
+
+      grid.appendChild(card);
+    });
+
+    if(editorMode){
+      var addCard = document.createElement("div");
+      addCard.className = "add-product-card";
+      addCard.id = "addProductCard";
+      addCard.innerHTML = "<span style='font-size:26px;'>＋</span><span>Agregar producto</span>";
+      grid.appendChild(addCard);
+    }
+  }
+
+  function updateCartFab(){
+    var count = 0;
+    Object.keys(cart).forEach(function(id){ count += cart[id]; });
+    document.getElementById("cartCount").textContent = count;
+  }
+
+  function renderCart(){
+    var wrap = document.getElementById("cartItems");
+    var emptyMsg = document.getElementById("cartEmptyMsg");
+    wrap.innerHTML = "";
+    var ids = Object.keys(cart).filter(function(id){ return cart[id] > 0; });
+
+    if(ids.length === 0){
+      emptyMsg.style.display = "block";
+      document.getElementById("cartTotal").textContent = "$0";
+      return;
+    }
+    emptyMsg.style.display = "none";
+
+    var total = 0;
+    ids.forEach(function(id){
+      var p = products.find(function(pr){ return pr.id === id; });
+      if(!p) return;
+      var qty = cart[id];
+      total += p.price * qty;
+
+      var row = document.createElement("div");
+      row.className = "cart-item";
+      var thumbHtml = p.photo
+        ? '<img class="thumb" src="'+p.photo+'">'
+        : '<div class="thumb">🛍️</div>';
+
+      row.innerHTML =
+        thumbHtml +
+        '<div class="meta"><div class="n">'+p.name+'</div><div class="p">'+fmtPrice(p.price)+' c/u</div></div>' +
+        '<div class="qty-ctrl">' +
+          '<button data-minus="'+id+'">−</button>' +
+          '<span>'+qty+'</span>' +
+          '<button data-plus="'+id+'">+</button>' +
+        '</div>';
+      wrap.appendChild(row);
+    });
+
+    document.getElementById("cartTotal").textContent = fmtPrice(total);
+  }
+
+  function addToCart(id){
+    cart[id] = (cart[id] || 0) + 1;
+    updateCartFab();
+  }
+
+  document.getElementById("grid").addEventListener("click", function(e){
+    var addId = e.target.getAttribute("data-add");
+    if(addId){ addToCart(addId); return; }
+
+    var editId = e.target.getAttribute("data-edit");
+    if(editId){ openProductModal(editId); return; }
+
+    var delId = e.target.getAttribute("data-del");
+    if(delId){
+      if(confirm("¿Borrar este producto?")){
+        products = products.filter(function(p){ return p.id !== delId; });
+        saveProducts();
+        renderGrid();
+      }
+      return;
+    }
+
+    if(e.target.closest("#addProductCard")){ openProductModal(null); }
+  });
+
+  // ===== CART DRAWER =====
+  var cartOverlay = document.getElementById("cartOverlay");
+  document.getElementById("cartFab").addEventListener("click", function(){
+    renderCart();
+    cartOverlay.classList.remove("hidden");
+  });
+  document.getElementById("closeCartBtn").addEventListener("click", function(){
+    cartOverlay.classList.add("hidden");
+  });
+  cartOverlay.addEventListener("click", function(e){
+    if(e.target === cartOverlay) cartOverlay.classList.add("hidden");
+  });
+  document.getElementById("cartItems").addEventListener("click", function(e){
+    var plusId = e.target.getAttribute("data-plus");
+    var minusId = e.target.getAttribute("data-minus");
+    if(plusId){ cart[plusId] = (cart[plusId]||0) + 1; renderCart(); updateCartFab(); }
+    if(minusId){
+      cart[minusId] = Math.max(0, (cart[minusId]||0) - 1);
+      renderCart(); updateCartFab();
+    }
+  });
+
+  document.getElementById("sendOrderBtn").addEventListener("click", function(){
+    var ids = Object.keys(cart).filter(function(id){ return cart[id] > 0; });
+    if(ids.length === 0){ alert("Todavía no agregaste productos."); return; }
+
+    var lines = ["🛒 *Pedido - " + storeInfo.name + "*", ""];
+    var total = 0;
+    ids.forEach(function(id){
+      var p = products.find(function(pr){ return pr.id === id; });
+      if(!p) return;
+      var qty = cart[id];
+      var subtotal = p.price * qty;
+      total += subtotal;
+      lines.push(qty + "x " + p.name + " - " + fmtPrice(subtotal));
+    });
+    lines.push("");
+    lines.push("Total: " + fmtPrice(total));
+
+    var text = encodeURIComponent(lines.join("\n"));
+    window.open("https://wa.me/" + WHATSAPP_NUMBER + "?text=" + text, "_blank");
+  });
+
+  // ===== EDITOR UNLOCK =====
+  var passModal = document.getElementById("passModal");
+  document.getElementById("editorDot").addEventListener("click", function(){
+    document.getElementById("passInput").value = "";
+    document.getElementById("passError").textContent = "";
+    passModal.classList.remove("hidden");
+    document.getElementById("passInput").focus();
+  });
+  document.getElementById("passCancelBtn").addEventListener("click", function(){
+    passModal.classList.add("hidden");
+  });
+  document.getElementById("passSubmitBtn").addEventListener("click", checkPassword);
+  document.getElementById("passInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter") checkPassword();
+  });
+  function checkPassword(){
+    var val = document.getElementById("passInput").value;
+    if(val === EDITOR_PASSWORD){
+      editorMode = true;
+      passModal.classList.add("hidden");
+      document.getElementById("editorBar").style.display = "flex";
+      renderGrid();
+    } else {
+      document.getElementById("passError").textContent = "Contraseña incorrecta";
+    }
+  }
+  document.getElementById("exitEditorBtn").addEventListener("click", function(){
+    editorMode = false;
+    document.getElementById("editorBar").style.display = "none";
+    renderGrid();
+  });
+
+  // ===== PRODUCT MODAL =====
+  var productModal = document.getElementById("productModal");
+  function openProductModal(id){
+    editingProductId = id;
+    pendingPhotoData = null;
+    var nameInput = document.getElementById("nameInput");
+    var priceInput = document.getElementById("priceInput");
+    var preview = document.getElementById("photoPreview");
+    document.getElementById("productError").textContent = "";
+    document.getElementById("photoInput").value = "";
+
+    if(id){
+      var p = products.find(function(pr){ return pr.id === id; });
+      document.getElementById("productModalTitle").textContent = "Editar producto";
+      nameInput.value = p.name;
+      priceInput.value = p.price;
+      if(p.photo){ preview.src = p.photo; preview.hidden = false; pendingPhotoData = p.photo; }
+      else { preview.hidden = true; }
+    } else {
+      document.getElementById("productModalTitle").textContent = "Nuevo producto";
+      nameInput.value = "";
+      priceInput.value = "";
+      preview.hidden = true;
+    }
+    productModal.classList.remove("hidden");
+  }
+  document.getElementById("cancelProductBtn").addEventListener("click", function(){
+    productModal.classList.add("hidden");
+  });
+  document.getElementById("photoInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){
+        var maxSize = 500;
+        var w = img.width, h = img.height;
+        if(w > h && w > maxSize){ h = Math.round(h * (maxSize / w)); w = maxSize; }
+        else if(h > maxSize){ w = Math.round(w * (maxSize / h)); h = maxSize; }
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        pendingPhotoData = canvas.toDataURL("image/jpeg", 0.72);
+        var preview = document.getElementById("photoPreview");
+        preview.src = pendingPhotoData;
+        preview.hidden = false;
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById("saveProductBtn").addEventListener("click", function(){
+    var name = document.getElementById("nameInput").value.trim();
+    var price = parseFloat(document.getElementById("priceInput").value);
+    if(!name || isNaN(price) || price < 0){
+      document.getElementById("productError").textContent = "Completá nombre y precio válido.";
+      return;
+    }
+    if(editingProductId){
+      var p = products.find(function(pr){ return pr.id === editingProductId; });
+      p.name = name; p.price = price;
+      if(pendingPhotoData) p.photo = pendingPhotoData;
+    } else {
+      products.push({
+        id: "p_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+        name: name,
+        price: price,
+        photo: pendingPhotoData || null
+      });
+    }
+    saveProducts();
+    productModal.classList.add("hidden");
+    renderGrid();
+  });
+
+  // ===== STORE INFO MODAL =====
+  var storeInfoModal = document.getElementById("storeInfoModal");
+  document.getElementById("editStoreInfoBtn").addEventListener("click", function(){
+    document.getElementById("storeNameInput").value = storeInfo.name;
+    document.getElementById("storeTaglineInput").value = storeInfo.tagline;
+    storeInfoModal.classList.remove("hidden");
+  });
+  document.getElementById("cancelStoreInfoBtn").addEventListener("click", function(){
+    storeInfoModal.classList.add("hidden");
+  });
+  document.getElementById("saveStoreInfoBtn").addEventListener("click", function(){
+    storeInfo.name = document.getElementById("storeNameInput").value.trim() || "Kiosco De Mati";
+    storeInfo.tagline = document.getElementById("storeTaglineInput").value.trim();
+    saveInfo();
+    renderStoreInfo();
+    storeInfoModal.classList.add("hidden");
+  });
+
+})();
+</script>
+
+</body>
+</html>
